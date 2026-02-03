@@ -46,8 +46,9 @@ func (ru *expandedRule) print() string {
 	}
 	origPrt := ru.prt
 	oRule := ru.rule
-	s := oRule.service
-	extra += " of " + s.name
+	if oRule != nil && oRule.service != nil {
+		extra += " of " + oRule.service.name
+	}
 	origPrt = getOrigPrt(ru)
 	var action string
 	if ru.deny {
@@ -71,6 +72,9 @@ func getOrigPrt(ru *expandedRule) *proto {
 	prt := ru.prt
 	protocol := prt.proto
 	oRule := ru.rule
+	if oRule == nil {
+		return prt
+	}
 	for _, oPrt := range oRule.prt {
 		if protocol != oPrt.proto {
 			continue

@@ -310,13 +310,25 @@ func clusterNavigation(from, to pathObj) navigation {
 			//	    debug("- Add from_loop->{exit}->{name}from_loop to exit exit_loop->{exit}->{name}exit_loop");
 			break
 		} else if fromLoop.distance >= toLoop.distance {
+
+			// Check for self-referencing loop exit (VRF loop cluster boundary)
+			// This prevents infinite loop when fromLoop.exit.getLoop() == fromLoop
+			if fromLoop.exit.getLoop() == fromLoop {
+				break
+			}
+
 			// Different loops, take next step from loop with higher distance.
 			add(fromLoop, fromLoop)
-
 			//	    debug("- Fr: from_loop->{exit}->{name}from_loop to itself");
 			from = fromLoop.exit
 			fromLoop = from.getLoop()
 		} else {
+
+			// Same check for toLoop side
+			if toLoop.exit.getLoop() == toLoop {
+				break
+			}
+
 			// Take step from toLoop.
 			//debug("- To: to_loop->{exit}->{name}to_loop to itself");
 			add(toLoop, toLoop)

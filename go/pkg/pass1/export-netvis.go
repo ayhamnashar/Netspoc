@@ -94,7 +94,7 @@ func (c *spoc) exportNetvis(stdout io.Writer, path string) {
 	// Determine the area each router belongs to.
 	home := c.routerHome()
 
-	// Areas and networks sorted by name, for deterministic output.
+	// Areas, networks and routers sorted by name, for deterministic output.
 	areaList := slices.SortedFunc(maps.Values(c.symTable.area),
 		func(a, b *area) int { return strings.Compare(a.name, b.name) })
 	netList := slices.SortedFunc(maps.Values(c.symTable.network),
@@ -102,8 +102,7 @@ func (c *spoc) exportNetvis(stdout io.Writer, path string) {
 	routerList := slices.SortedFunc(maps.Values(c.symTable.router),
 		func(a, b *router) int { return strings.Compare(a.name, b.name) })
 
-	// Map each area boundary interface to the areas it is border of,
-	// ordered by area name.
+	// Map each boundary interface to the areas it borders, ordered by name.
 	roleInAreas := make(map[*routerIntf][]*area)
 	addRole := func(intf *routerIntf, a *area) {
 		for _, x := range roleInAreas[intf] {
@@ -122,7 +121,7 @@ func (c *spoc) exportNetvis(stdout io.Writer, path string) {
 		}
 	}
 
-	// Build maps of child areas and networks for each area, for deterministic output.
+	// Child areas and networks per area, in deterministic order.
 	childAreas := make(map[*area][]*area)
 	for _, b := range areaList {
 		if a := b.inArea; a != nil {
@@ -135,7 +134,7 @@ func (c *spoc) exportNetvis(stdout io.Writer, path string) {
 			areaNetworks[a] = append(areaNetworks[a], n)
 		}
 	}
-	// Neighboring objects of each area and their number.
+	// Neighboring objects of each area.
 	neighborList := make(map[*area][]string)
 	for _, a := range areaList {
 		if l := areaNeighborsReal(a, home); l != nil {
@@ -171,19 +170,13 @@ func (c *spoc) exportNetvis(stdout io.Writer, path string) {
 
 // areaNeighborsReal determines the real neighboring objects of an area,
 // i.e. the networks and routers on the other side of its borders.
-// An area only looks beyond its inclusive borders, if it has some.
+// Both border and inclusive_border interfaces are considered:
+// Across a border interface the router lies outside the area,
+// across an inclusive border interface the network lies outside.
 // A neighboring area on the other side is reported as well, but not
 // an enclosing or enclosed area.
 // Areas are reported first, all objects sorted by name.
 func areaNeighborsReal(a *area, home map[*router]*area) []string {
-	var srcs []*routerIntf
-	useInclusive := len(a.inclusiveBorder) > 0
-	if useInclusive {
-		srcs = a.inclusiveBorder
-	} else {
-		srcs = a.border
-	}
-
 	var ids []string
 	seen := make(map[string]bool)
 	add := func(id string) {
@@ -192,31 +185,30 @@ func areaNeighborsReal(a *area, home map[*router]*area) []string {
 			ids = append(ids, id)
 		}
 	}
-	// Report area x as neighbor, if it is not identical with area a
-	// and neither encloses a nor is enclosed by a.
+	// Area x is a neighbor unless it is a, an ancestor or a descendant.
 	includeArea := func(x *area) bool {
 		return x != nil && x != a && !areaIsAncestor(x, a) && !areaIsAncestor(a, x)
 	}
-	for _, intf := range srcs {
-		if useInclusive {
-			n := intf.network
-			add(n.name)
-			if x := n.zone.inArea; includeArea(x) {
-				add(x.name)
-			}
-		} else {
-			r := intf.router
-			if r.origRouter != nil {
-				r = r.origRouter
-			}
-			add(r.name)
-			if x := home[r]; includeArea(x) {
-				add(x.name)
-			}
+	// Across a border interface the router is outside the area.
+	for _, intf := range a.border {
+		r := intf.router
+		if r.origRouter != nil {
+			r = r.origRouter
+		}
+		add(r.name)
+		if x := home[r]; includeArea(x) {
+			add(x.name)
 		}
 	}
-	// Sort area neighbors before network/router neighbors,
-	// all by name.
+	// Across an inclusive border interface the network is outside the area.
+	for _, intf := range a.inclusiveBorder {
+		n := intf.network
+		add(n.name)
+		if x := n.zone.inArea; includeArea(x) {
+			add(x.name)
+		}
+	}
+	// Sort area neighbors first, then all by name.
 	slices.SortFunc(ids, func(x, y string) int {
 		xArea, yArea := isAreaID(x), isAreaID(y)
 		if xArea != yArea {
@@ -235,15 +227,12 @@ func isAreaID(id string) bool {
 	return strings.HasPrefix(id, "area:")
 }
 
-// routerHome determines the area each router belongs to.
-// A managed router belongs to the smallest area it is a managed router of.
-// A managed router belongs to an area only as member of this area,
-// not because it borders on it.
-// Any other router belongs to the smallest area of its interfaces.
+// routerHome maps each router to its home area: the smallest area it is a
+// managed router of, or for unmanaged routers the smallest area of its
+// interfaces.
 func (c *spoc) routerHome() map[*router]*area {
 	home := make(map[*router]*area)
-	// ascendingAreas is sorted by size then by name, so the first area
-	// found is the smallest one.
+	// ascendingAreas is ordered by size, then name; the first match is smallest.
 	for _, a := range c.ascendingAreas {
 		for _, r := range a.managedRouters {
 			if _, found := home[r]; !found {
@@ -274,8 +263,8 @@ func (c *spoc) routerHome() map[*router]*area {
 	return home
 }
 
-// areaSmaller returns true, if area a is smaller than area b,
-// or has equal size and a smaller name.
+// areaSmaller reports whether a is smaller than b, or equal in size with a
+// smaller name.
 func areaSmaller(a, b *area) bool {
 	sa, sb := areaSize(a), areaSize(b)
 	return sa < sb || (sa == sb && strings.Compare(a.name, b.name) < 0)
@@ -298,10 +287,9 @@ func areaIsAncestor(a, b *area) bool {
 	return false
 }
 
-// getVisArea creates the visArea node for an area. Routers are listed if
-// the area is their home area. The routers, networks, child areas and
-// neighbors of the area are passed in as precomputed lists in
-// deterministic order.
+// getVisArea builds the visArea node. Its routers are the entries of
+// routerList whose home area is a; networks, child areas and neighbors are
+// passed in precomputed.
 func getVisArea(a *area, home map[*router]*area, routerList []*router, neighbors []string, childAreas []*area, networks []*network) visArea {
 	node := visArea{
 		Id:   a.name,
@@ -316,8 +304,7 @@ func getVisArea(a *area, home map[*router]*area, routerList []*router, neighbors
 	for _, intf := range a.inclusiveBorder {
 		node.InclusiveBorder = append(node.InclusiveBorder, intf.name)
 	}
-	// A network is part of an area if its zone is in the area. The networks
-	// list is precomputed from zone.inArea, not from a.zones, because
+	// Networks are precomputed from zone.inArea, not from a.zones, because
 	// networks next to a crypto hub are not tracked in a.zones.
 	for _, n := range networks {
 		node.Networks = append(node.Networks, n.name)
@@ -335,10 +322,9 @@ func getVisArea(a *area, home map[*router]*area, routerList []*router, neighbors
 		seen[r] = true
 		node.Routers = append(node.Routers, r.name)
 	}
-	// List all routers whose home area is this area. Besides managed and
-	// border routers this includes unmanaged routers that are simply
-	// located inside the area. routerList is sorted by name, so the
-	// result is deterministic.
+	// Add routers whose home area is a: managed routers plus unmanaged routers
+	// located inside the area. routerList is sorted by name, so the result is
+	// deterministic.
 	for _, r := range routerList {
 		addRouter(r)
 	}
@@ -349,9 +335,9 @@ func getVisArea(a *area, home map[*router]*area, routerList []*router, neighbors
 	return node
 }
 
-// routerNeighborCount counts the interfaces of a router, increased by
-// the number of areas the router is a border router of, excluding its
-// home area and enclosing areas.
+// routerNeighborCount counts a router's interfaces plus the neighboring
+// areas it borders on (border or inclusive_border), excluding its home
+// area and enclosing areas.
 func routerNeighborCount(r *router, home map[*router]*area, roleInAreas map[*routerIntf][]*area) int {
 	if r.origRouter != nil {
 		r = r.origRouter
@@ -371,9 +357,9 @@ func routerNeighborCount(r *router, home map[*router]*area, roleInAreas map[*rou
 	return count
 }
 
-// networkNeighborCount counts the interfaces of a network, increased by
-// the number of areas that have one of the interfaces as border,
-// excluding the network's own area and enclosing areas.
+// networkNeighborCount counts a network's interfaces plus the neighboring
+// areas that have one of them as border or inclusive_border, excluding the
+// network's own area and enclosing areas.
 func networkNeighborCount(n *network, roleInAreas map[*routerIntf][]*area) int {
 	count := len(n.interfaces)
 	a := n.zone.inArea
@@ -390,8 +376,8 @@ func networkNeighborCount(n *network, roleInAreas map[*routerIntf][]*area) int {
 	return count
 }
 
-// areaNeighborCount counts the borders of an area, increased by the
-// number of neighboring areas.
+// areaNeighborCount counts the boundary interfaces of an area plus its
+// neighboring areas.
 func areaNeighborCount(a *area, neighborList map[*area][]string) int {
 	count := len(a.border) + len(a.inclusiveBorder)
 	for _, id := range neighborList[a] {
@@ -489,8 +475,8 @@ func getVisRouter(r *router, home map[*router]*area, roleInAreas map[*routerIntf
 			} else {
 				node.Neighbors = append(node.Neighbors,
 					visNeighbor{Id: intf.network.name, NeighborCount: networkNeighborCount(intf.network, roleInAreas)})
-				// Add neighboring area, but not the area the router belongs to
-				// and not an enclosing area.
+				// Add neighboring area unless it is the router's home area
+				// or an enclosing area.
 				addArea := func(a *area) {
 					if a != nil && a != routerArea && !areaIsAncestor(routerArea, a) &&
 						!seen[a.name] && r.managed != "" {
@@ -500,7 +486,7 @@ func getVisRouter(r *router, home map[*router]*area, roleInAreas map[*routerIntf
 					}
 				}
 				addArea(intf.network.zone.inArea)
-				// Add areas the interface is a border of.
+				// Add areas this interface borders on.
 				for _, a := range roleInAreas[intf] {
 					addArea(a)
 				}

@@ -507,7 +507,8 @@ area:c = {
         "interface:r1.n1"
       ],
       "neighbors": [
-        "network:n1"
+        "network:n1",
+        "router:r3"
       ],
       "networks": [
         "network:n2",
@@ -1179,7 +1180,8 @@ area:a = {
         "interface:r1.n1"
       ],
       "neighbors": [
-        "network:n1"
+        "network:n1",
+        "router:r3"
       ],
       "networks": [
         "network:n2",

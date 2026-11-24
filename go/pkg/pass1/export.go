@@ -4,7 +4,8 @@ import (
 	"cmp"
 	"crypto/sha1"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"os"
@@ -34,9 +35,8 @@ func (c *spoc) writeJson(path string, data any) {
 		c.abort("Can't %v", err)
 	}
 	defer fd.Close()
-	enc := json.NewEncoder(fd)
-	enc.SetEscapeHTML(false)
-	enc.Encode(data)
+	json.MarshalWrite(fd, data, jsontext.EscapeForHTML(false))
+	fmt.Fprintln(fd)
 }
 
 func (c *spoc) exportJson(dir, path string, data any) {
@@ -150,11 +150,6 @@ func ipNatForObject(obj srvObj, dst jsonMap) {
 }
 
 func (c *spoc) getZoneName(z *zone) string {
-	// Ignore IPv6 part of dual stack zone.
-	// This must match check in exportZone2Areas.
-	if z.ipV6 && z.combined46 != nil {
-		z = z.combined46
-	}
 	ipp := c.getNetwork00(z.ipV6).ipp
 	agg := z.ipPrefix2aggregate[ipp]
 	if agg != nil && !strings.HasPrefix(agg.name, "any:[") {
@@ -292,42 +287,13 @@ func protoDescr(l []*proto) stringList {
 	return result
 }
 
-func findVisibility(owners, uowners stringList) string {
-	DAOwner := false
-	m := make(map[string]bool)
-	for _, ow := range owners {
-		if strings.HasPrefix(ow, "DA_") {
-			DAOwner = true
-		}
-		m[ow] = true
-	}
-	DAUser := 0
-	otherUser := 0
-	for _, ow := range uowners {
-		if !m[ow] {
-			if strings.HasPrefix(ow, "DA_") {
-				DAUser++
-			} else {
-				otherUser++
-			}
-		}
-	}
-
-	if otherUser >= 3 {
-		return "*"
-	} else if DAOwner || DAUser >= 3 {
-		return "DA_"
-	}
-	return ""
-}
-
 // Calculate unique id for set of rules.
 // Take first 8 characters of base64 encoded SHA1 hash.
 // This gives 8x6=48 bits.
 // Collisions would occur with probability of 0.5 for 2^24 different ids.
 // We should be extremely safe for up to 2^14 different ids.
 func calcRulesKey(rules []jsonMap) string {
-	b, _ := json.Marshal(rules)
+	b, _ := json.Marshal(rules, json.Deterministic(true))
 	sum := sha1.Sum(b)
 	b = sum[:6]
 	digest := base64.StdEncoding.EncodeToString(b)
@@ -350,7 +316,6 @@ type exportedSvc struct {
 	partOwners   []string
 	partUowners  []string
 	uowners      []string
-	visible      string
 }
 
 // Split service, if 'user' has different values in normalized rules.
@@ -672,8 +637,6 @@ func (c *spoc) setupServiceInfo(
 		s.uowners = uowners
 		s.partUowners = xOwnersForObjects(users, pInfo)
 		s.outerUowners = xOwnersForObjects(users, oInfo)
-
-		s.visible = findVisibility(owners, uowners)
 	}
 }
 
@@ -1194,20 +1157,6 @@ func (c *spoc) exportUsersAndServiceLists(dir string,
 		addChk(s.uowners, "user", chkUser)
 		addChk(s.partUowners, "user", chkUser)
 		addChk(s.outerUowners, "user", chkUser)
-		if visible := s.visible; visible != "" {
-			for ow := range c.symTable.owner {
-				type2sMap := owner2type2sMap[ow]
-				if type2sMap["owner"][s] {
-					continue
-				}
-				if type2sMap["user"][s] {
-					continue
-				}
-				if visible == "*" || strings.HasPrefix(ow, visible) {
-					add(stringList{ow}, "visible")
-				}
-			}
-		}
 	}
 
 	visibleOwner := getVisibleOwner(allObjects, pInfo, oInfo)
@@ -1215,16 +1164,13 @@ func (c *spoc) exportUsersAndServiceLists(dir string,
 		type2sMap := owner2type2sMap[ow]
 		type2snames := make(map[string]stringList)
 		service2users := make(map[string]stringList)
-		for _, typ := range []string{"owner", "user", "visible"} {
+		for _, typ := range []string{"owner", "user"} {
 			sNames := make(stringList, 0)
-		SVC:
 			for s := range type2sMap[typ] {
 				sName := strings.TrimPrefix(s.name, "service:")
 				sNames.push(sName)
 				var users srvObjList
 				switch typ {
-				case "visible":
-					continue SVC
 				case "owner":
 					users = s.user
 				case "user":

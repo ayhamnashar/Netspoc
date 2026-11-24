@@ -87,13 +87,74 @@ network:n1 = { ip6 = ::a3e:120/123; }
 router:r1 = {
  model = ASA;
  managed = local;
- filter_only =  ::a3e:100/120, ::a3e:200/120, ::a3e:300/120;
+ filter_only =  ::a3e:100/120, ::a3e:200/120, ::a3e:900/120;
  interface:n1 = { ip6 = ::a3e:121; hardware = n1; }
  interface:n2 = { ip6 = ::a3e:221; hardware = n2; }
 }
 network:n2 = { ip6 = ::a3e:220/123; }
 =WARNING=
-Warning: Useless 'filter_only = ::a3e:300/120' at router:r1
+Warning: Useless 'filter_only = ::a3e:900/120' at router:r1
+=END=
+
+############################################################
+=TITLE=Duplicate value in attribute filter_only
+=INPUT=
+network:n1 = { ip6 = ::a3e:120/123; }
+router:r1 = {
+ model = ASA;
+ managed = local;
+ filter_only =  ::a3e:100/120, ::a3e:100/120, ::a3e:100/120;
+ interface:n1 = { ip6 = ::a3e:121; hardware = n1; }
+}
+=WARNING=
+Warning: Duplicate value ::a3e:100/120 in filter_only of router:r1
+Warning: Duplicate value ::a3e:100/120 in filter_only of router:r1
+=END=
+
+############################################################
+=TITLE=Redundant value in attribute filter_only
+=INPUT=
+network:n1 = { ip6 = ::a3e:120/123; }
+router:r1 = {
+ model = ASA;
+ managed = local;
+ filter_only =  ::a3e:120/123, ::a3e:100/120;
+ interface:n1 = { ip6 = ::a3e:121; hardware = n1; }
+}
+=WARNING=
+Warning: Useless 'filter_only = ::a3e:120/123' at router:r1
+=END=
+
+############################################################
+=TITLE=Value should be combined in attribute filter_only
+=INPUT=
+network:n0 = { ip6 = ::a3e:0/120; }
+network:n1 = { ip6 = ::a3e:100/120; }
+router:r1 = {
+ model = ASA;
+ managed = local;
+ filter_only =  ::a3e:0/120, ::a3e:100/120;
+ interface:n0 = { ip6 = ::a3e:1; hardware = n0; }
+ interface:n1 = { ip6 = ::a3e:101; hardware = n1; }
+}
+=WARNING=
+Warning: ::a3e:0/120 and ::a3e:100/120 should be combined to ::a3e:0/119 in filter_only of router:r1
+=END=
+
+############################################################
+=TITLE=Redundant value inhibits other warning about combined
+=INPUT=
+network:n0 = { ip6 = ::a3e:0/120; }
+network:n1 = { ip6 = ::a3e:100/120; }
+router:r1 = {
+ model = ASA;
+ managed = local;
+ filter_only =  ::a3e:0/120, ::a3e:100/120, ::a3e:80/121;
+ interface:n0 = { ip6 = ::a3e:1; hardware = n0; }
+ interface:n1 = { ip6 = ::a3e:101; hardware = n1; }
+}
+=WARNING=
+Warning: Useless 'filter_only = ::a3e:80/121' at router:r1
 =END=
 
 ############################################################
@@ -137,14 +198,14 @@ router:r1 = {
 router:r2 = {
  model = IOS;
  managed = local;
- filter_only =  ::a3e:f000/117, ::a3e:0/115,;
+ filter_only =  ::a3e:0/115, ::a3e:f000/117,;
  interface:n4 = { ip6 = ::a3e:f202; hardware = n4; }
  interface:n2 = { ip6 = ::a3e:201; hardware = n2; }
 }
 router:r3 = {
  model = IOS;
  managed = local;
- filter_only =  ::a3e:f000/118, ::a3e:0/115, ::a3e:2000/115;
+ filter_only =  ::a3e:f000/118, ::a3e:0/115, ::a3f:0/112;
  interface:n4 = { ip6 = ::a3e:f203; hardware = n4; }
  interface:n3 = { ip6 = ::a3e:341; hardware = n3; }
 }
@@ -152,6 +213,26 @@ router:r3 = {
 Error: router:r1 and router:r2 must have identical values in attribute 'filter_only'
 Error: router:r1 and router:r3 must have identical values in attribute 'filter_only'
 =END=
+
+############################################################
+=TITLE=Values of filter_only are sorted before compare
+=INPUT=
+network:n1 = { ip6 = ::a3e:120/123; }
+network:n2 = { ip6 = ::a3e:200/123; }
+router:r1 = {
+ model = ASA;
+ managed = local;
+ filter_only =  ::a3e:100/120, ::a3e:200/120;
+ interface:n1 = { ip6 = ::a3e:121; hardware = n1; }
+}
+router:r2 = {
+ model = ASA;
+ managed = local;
+ filter_only =  ::a3e:200/120, ::a3e:100/120;
+ interface:n1 = { ip6 = ::a3e:122; hardware = n1; }
+ interface:n2 = { ip6 = ::a3e:202; hardware = n2; }
+}
+=WARNING=NONE
 
 ############################################################
 # Shared topology
@@ -380,7 +461,7 @@ access-group n1_in in interface n1
 =END=
 
 ############################################################
-=TITLE=Ignore non matching local aggregate
+=TITLE=Unnamed aggregate with IP not matching filter_only
 =INPUT=
 [[topo]]
 service:Test = {
@@ -389,15 +470,70 @@ service:Test = {
         dst = network:n2;
         prt = tcp 80;
 }
+=ERROR=
+Error: any:[ip6=::a63:0/112 & network:n1] doesn't match attribute 'filter_only' of router:d32
+=END=
+
+############################################################
+=TITLE=Named aggregate at unnumbered network not matching filter_only
+=INPUT=
+network:n1 = { ip6 = ::a01:100/120; }
+router:r1 = {
+ model = IOS;
+ managed = local;
+ filter_only = ::a01:0/112;
+ interface:n1 = { ip6 = ::a01:101; hardware = n1; }
+ interface:un = { unnumbered6; hardware = un; }
+}
+network:un = { unnumbered6; }
+router:r2 = {
+ model = IOS;
+ managed;
+ interface:un = { unnumbered6; hardware = un; }
+ interface:n2 = { ip6 = ::a02:201; hardware = n2; }
+}
+network:n2 = { ip6 = ::a02:200/120; }
+
+any:un = { link = network:un; }
+service:s1 = {
+ user = network:n1;
+ permit src = user; dst = any:un; prt = tcp 80;
+}
 =OUTPUT=
---ipv6/d32
-! n1_in
-object-group network v6g0
- network-object ::a3e:0/117
- network-object ::a3e:f100/120
-access-list n1_in extended deny ip any6 object-group v6g0
-access-list n1_in extended permit ip any6 any6
-access-group n1_in in interface n1
+--ipv6/r1
+ipv6 access-list n1_in
+ deny ipv6 any host ::a01:101
+ permit tcp ::a01:100/120 any eq 80
+ deny ipv6 any ::a01:0/112
+ permit ipv6 any any
+=END=
+
+############################################################
+=TITLE=Unnamed aggregate at unnumbered network not matching filter_only
+=INPUT=
+network:n1 = { ip6 = ::a01:100/120; }
+router:r1 = {
+ model = IOS;
+ managed = local;
+ filter_only = ::a01:0/112;
+ interface:n1 = { ip6 = ::a01:101; hardware = n1; }
+ interface:un = { unnumbered6; hardware = un; }
+}
+network:un = { unnumbered6; }
+router:r2 = {
+ model = IOS;
+ managed;
+ interface:un = { unnumbered6; hardware = un; }
+ interface:n2 = { ip6 = ::a02:201; hardware = n2; }
+}
+network:n2 = { ip6 = ::a02:200/120; }
+
+service:s1 = {
+ user = network:n1;
+ permit src = user; dst = any:[network:un]; prt = tcp 80;
+}
+=ERROR=
+Error: any:[network:un] doesn't match attribute 'filter_only' of router:r1
 =END=
 
 ############################################################

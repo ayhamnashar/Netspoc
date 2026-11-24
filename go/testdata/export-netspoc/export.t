@@ -80,22 +80,19 @@ service:test = {
  "owner": [
   "test"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/y/service_lists
 {
  "owner": [],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/z/service_lists
 {
  "owner": [],
  "user": [
   "test"
- ],
- "visible": []
+ ]
 }
 =END=
 
@@ -111,16 +108,14 @@ service:test = {
 --owner/y/service_lists
 {
  "owner": [],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/z/service_lists
 {
  "owner": [],
  "user": [
   "test"
- ],
- "visible": []
+ ]
 }
 =END=
 
@@ -138,8 +133,7 @@ service:test = {
  "owner": [],
  "user": [
   "test"
- ],
- "visible": []
+ ]
 }
 =END=
 
@@ -161,8 +155,7 @@ service:test2 = {
  "owner": [],
  "user": [
   "test2"
- ],
- "visible": []
+ ]
 }
 --owner/z/service_lists
 {
@@ -170,8 +163,7 @@ service:test2 = {
  "user": [
   "test",
   "test2"
- ],
- "visible": []
+ ]
 }
 =END=
 
@@ -193,8 +185,7 @@ service:test2 = {
  "owner": [
   "test2"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/z/service_lists
 {
@@ -202,8 +193,7 @@ service:test2 = {
   "test",
   "test2"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 =END=
 
@@ -225,8 +215,7 @@ service:test2 = {
  "owner": [],
  "user": [
   "test2"
- ],
- "visible": []
+ ]
 }
 --owner/z/service_lists
 {
@@ -234,8 +223,7 @@ service:test2 = {
  "user": [
   "test",
   "test2"
- ],
- "visible": []
+ ]
 }
 =END=
 
@@ -399,24 +387,30 @@ service:s1 = {
   "ip": "0.0.0.0/0",
   "is_supernet": 1,
   "owner": "clients",
-  "zone": "any:[network:tunnel:vpn1]"
+  "zone": "any:[network:clients]"
  },
  "interface:vpn1.clients": {
   "ip": "short",
   "nat": { "clients": "short" },
   "owner": "clients",
-  "zone": "any:[network:tunnel:vpn1]"
+  "zone": "any:[network:clients]"
  },
  "network:clients": {
   "ip": "10.99.1.0/24",
   "nat": { "clients": "10.9.9.0/24" },
   "owner": "clients",
-  "zone": "any:[network:tunnel:vpn1]"
+  "zone": "any:[network:clients]"
  },
  "network:n1": {
   "ip": "10.1.1.0/24",
   "zone": "any:[network:n1]"
  }
+}
+--owner/clients/users
+{
+ "s1": [
+  "any:[network:clients]"
+ ]
 }
 =END=
 
@@ -842,8 +836,7 @@ service:h3 = {
   "n2",
   "n3"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/a2/service_lists
 {
@@ -854,8 +847,7 @@ service:h3 = {
   "n2",
   "n3"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/n2/service_lists
 {
@@ -866,8 +858,7 @@ service:h3 = {
   "n2",
   "n3"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/n3/service_lists
 {
@@ -878,8 +869,7 @@ service:h3 = {
   "n2",
   "n3"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/h3/service_lists
 {
@@ -890,125 +880,7 @@ service:h3 = {
   "n2",
   "n3"
  ],
- "user": [],
- "visible": []
-}
-=END=
-
-############################################################
-=TITLE=Visible services
-=INPUT=
-owner:x1 = { admins = x1@example.com; }
-owner:x2 = { admins = x2@example.com; }
-owner:x3 = { admins = x3@example.com; }
-owner:x4 = { admins = x4@example.com; }
-owner:DA_1 = { admins = DA_1@example.com; }
-owner:DA_2 = { admins = DA_2@example.com; }
-owner:DA_3 = { admins = DA_3@example.com; }
-owner:DA_4 = { admins = DA_4@example.com; }
-network:n1 = { ip = 10.1.1.0/24;
- host:x1 = { ip = 10.1.1.1; owner = x1; }
- host:x2 = { ip = 10.1.1.2; owner = x2; }
- host:x3 = { ip = 10.1.1.3; owner = x3; }
- host:x4 = { ip = 10.1.1.4; owner = x4; }
- host:x5 = { ip = 10.1.1.5; }
-}
-network:n2 = { ip = 10.1.2.0/24;
- host:DA_1 = { ip = 10.1.2.1; owner = DA_1; }
- host:DA_2 = { ip = 10.1.2.2; owner = DA_2; }
- host:DA_3 = { ip = 10.1.2.3; owner = DA_3; }
- host:DA_4 = { ip = 10.1.2.4; owner = DA_4; }
- host:DA_5 = { ip = 10.1.2.5; }
-}
-router:r = {
- model = ASA;
- managed;
- interface:n1 = { ip = 10.1.1.99; hardware = n1; }
- interface:n2 = { ip = 10.1.2.99; hardware = n2; }
-}
-service:s1 = {
- user = host:x1, host:x2, host:x3;
- permit src = user; dst = host:DA_1; prt = tcp 80;
-}
-service:s2 = {
- user = host:DA_1, host:DA_2, host:DA_3;
- permit src = user; dst = host:x1; prt = tcp 80;
-}
-service:s3 = {
- user = host:DA_1, host:DA_2, host:x3;
- permit src = user; dst = host:x1; prt = tcp 80;
-}
-service:s4 = {
- user = host:x1, host:x2, host:x3;
- permit src = user; dst = host:x5; prt = tcp 80;
-}
-service:s5 = {
- user = host:DA_1, host:DA_2, host:DA_3;
- permit src = user; dst = host:x5; prt = tcp 81;
-}
-service:s6 = {
- user = host:DA_5;
- permit src = user; dst = host:x5; prt = tcp 82;
-}
-service:s7 = {
- user = host:x1;
- permit src = user; dst = host:DA_1; prt = tcp 80;
-}
-service:s8 = {
- multi_owner;
- user = host:x1;
- permit src = user; dst = host:DA_1, host:x2; prt = tcp 80;
-}
-=OUTPUT=
---owner/x1/service_lists
-{
- "owner": [
-  "s2",
-  "s3"
- ],
- "user": [
-  "s1",
-  "s4",
-  "s7",
-  "s8"
- ],
- "visible": []
-}
---owner/x4/service_lists
-{
- "owner": [],
- "user": [],
- "visible": [
-  "s1",
-  "s4"
- ]
-}
---owner/DA_1/service_lists
-{
- "owner": [
-  "s1",
-  "s7",
-  "s8"
- ],
- "user": [
-  "s2",
-  "s3",
-  "s5"
- ],
- "visible": ["s4"]
-}
---owner/DA_4/service_lists
-{
- "owner": [],
- "user": [],
- "visible": [
-  "s1",
-  "s2",
-  "s4",
-  "s5",
-  "s7",
-  "s8"
- ]
+ "user": []
 }
 =END=
 
@@ -1149,7 +1021,7 @@ service:s2 = {
    {
     "action": "permit",
     "dst": [
-     "any:[network:n2]"
+     "any:[network:n1]"
     ],
     "has_user": "src",
     "prt": [
@@ -1205,6 +1077,10 @@ router:inet = {
  interface:Internet = { nat_out = inet; }
 }
 network:Internet = { ip = 0.0.0.0/0; has_subnets; }
+service:s1 = {
+ user = network:Big;
+ permit src = user; dst = any:[network:Internet]; prt = tcp 80;
+}
 =OUTPUT=
 -- objects
 {
@@ -1217,17 +1093,17 @@ network:Internet = { ip = 0.0.0.0/0; has_subnets; }
  },
  "interface:asa.DMZ": {
   "ip": "10.9.9.1",
-  "zone": "any:[network:DMZ]"
+  "zone": "network:Internet"
  },
  "interface:inet.DMZ": {
   "ip": "short",
   "owner": "x",
-  "zone": "any:[network:DMZ]"
+  "zone": "network:Internet"
  },
  "interface:inet.Internet": {
   "ip": "short",
   "owner": "x",
-  "zone": "any:[network:DMZ]"
+  "zone": "network:Internet"
  },
  "network:Big": {
   "ip": "10.1.0.0/16",
@@ -1240,13 +1116,32 @@ network:Internet = { ip = 0.0.0.0/0; has_subnets; }
  "network:DMZ": {
   "ip": "10.9.9.0/24",
   "owner": "x",
-  "zone": "any:[network:DMZ]"
+  "zone": "network:Internet"
  },
  "network:Internet": {
   "ip": "0.0.0.0/0",
   "is_supernet": 1,
   "owner": "x",
-  "zone": "any:[network:DMZ]"
+  "zone": "network:Internet"
+ }
+}
+-- services
+{
+ "s1": {
+  "details": {"owner": ["x"]},
+  "rules": [
+   {
+    "action": "permit",
+    "dst": [
+     "network:Internet"
+    ],
+    "has_user": "src",
+    "prt": [
+     "tcp 80"
+    ],
+    "src": []
+   }
+  ]
  }
 }
 =END=
@@ -1528,8 +1423,7 @@ service:s1 = {
  "owner": [
   "s1"
  ],
- "user": [],
- "visible": []
+ "user": []
 }
 --owner/all/assets
 {
@@ -2290,8 +2184,7 @@ service:s1 = {
  "owner": [],
  "user": [
   "s1"
- ],
- "visible": []
+ ]
 }
 -- owner/all/users
 {
@@ -2304,8 +2197,7 @@ service:s1 = {
  "owner": [],
  "user": [
   "s1"
- ],
- "visible": []
+ ]
 }
 -- owner/a/users
 {
@@ -2472,6 +2364,91 @@ service:s2 = {
  "s2": [
   "any:[network:n1]"
  ]
+}
+=END=
+
+############################################################
+=TITLE=Network in zone cluster used as network and as aggregate
+=INPUT=
+owner:o = {admins = a@b.c;}
+network:n1 = {ip = 10.1.1.0/24; owner = o;}
+network:n2 = {ip = 10.1.2.0/24; owner = o;}
+network:n3 = {ip = 10.1.3.0/24; owner = o;}
+router:r1 = {
+ managed;
+ model = IOS;
+ interface:n1 = {ip = 10.1.1.1; hardware = n1;}
+ interface:n2 = {ip = 10.1.2.1; hardware = n2;}
+}
+router:r2 = {
+ managed;
+ model = IOS;
+ interface:n1 = {ip = 10.1.1.2; hardware = n1;}
+ interface:n3 = {ip = 10.1.3.2; hardware = n3;}
+}
+router:r3 = {
+ interface:n2 = {ip = 10.1.2.3;}
+ interface:n3 = {ip = 10.1.3.3;}
+}
+pathrestriction:p = interface:r2.n3, interface:r3.n3;
+service:s1 = {
+ user = any:[ip=10.1.2.0/24 & network:n2];
+ permit src = network:n1; dst = user; prt = tcp 80;
+}
+service:s2 = {
+ user = network:n2;
+ permit src = network:n1; dst = user; prt = tcp 81;
+}
+=OUTPUT=
+-- objects
+{
+ "interface:r1.n1": {
+  "ip": "10.1.1.1",
+  "zone": "any:[network:n1]"
+ },
+ "interface:r1.n2": {
+  "ip": "10.1.2.1",
+  "zone": "any:[network:n2]"
+ },
+ "interface:r2.n1": {
+  "ip": "10.1.1.2",
+  "zone": "any:[network:n1]"
+ },
+ "interface:r2.n3": {
+  "ip": "10.1.3.2",
+  "zone": "any:[network:n2]"
+ },
+ "interface:r3.n2": {
+  "ip": "10.1.2.3",
+  "owner": "o",
+  "zone": "any:[network:n2]"
+ },
+ "interface:r3.n3": {
+  "ip": "10.1.3.3",
+  "owner": "o",
+  "zone": "any:[network:n2]"
+ },
+ "network:n1": {
+  "ip": "10.1.1.0/24",
+  "owner": "o",
+  "zone": "any:[network:n1]"
+ },
+ "network:n2": {
+  "ip": "10.1.2.0/24",
+  "is_supernet": 1,
+  "owner": "o",
+  "zone": "any:[network:n2]"
+ },
+ "network:n3": {
+  "ip": "10.1.3.0/24",
+  "owner": "o",
+  "zone": "any:[network:n2]"
+ }
+}
+--owner/o/users
+{
+ "s1": [ "network:n2" ],
+ "s2": [ "network:n2" ]
 }
 =END=
 
@@ -2977,8 +2954,7 @@ service:n3 = {
   "a",
   "n2",
   "n3"
- ],
- "visible": []
+ ]
 }
 --owner/n1/service_lists
 {
@@ -2987,8 +2963,7 @@ service:n3 = {
   "a",
   "h1",
   "n1"
- ],
- "visible": []
+ ]
 }
 --owner/n2/service_lists
 {
@@ -2996,8 +2971,7 @@ service:n3 = {
  "user": [
   "a",
   "n2"
- ],
- "visible": []
+ ]
 }
 --owner/h1/service_lists
 {
@@ -3006,8 +2980,7 @@ service:n3 = {
   "a",
   "h1",
   "n1"
- ],
- "visible": []
+ ]
 }
 =END=
 
@@ -4083,7 +4056,7 @@ router:r1 = {
 }
 =OUTPUT=
 --owner/all/nat_set
-null
+[]
 --owner/n23/nat_set
 [ "n2" ]
 --owner/n4/nat_set
@@ -4110,7 +4083,7 @@ router:r1 = {
 }
 =OUTPUT=
 --owner/all/nat_set
-null
+[]
 =END=
 
 ############################################################
@@ -4141,7 +4114,7 @@ router:r1 = {
 }
 =OUTPUT=
 --owner/o/nat_set
-null
+[]
 =END=
 
 ############################################################
@@ -4175,7 +4148,7 @@ router:r1 =  {
 }
 =OUTPUT=
 --owner/o1/nat_set
-null
+[]
 --owner/o2/nat_set
 [ "h1" ]
 =END=

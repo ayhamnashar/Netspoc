@@ -256,16 +256,6 @@ func (c *spoc) expandGroup1(
 		return !(intf.ipType == tunnelIP ||
 			visible && (intf.ipType == unnumberedIP || intf.ipType == bridgedIP))
 	}
-	withCombinedZones := func(a *area, f func(*zone)) {
-		for _, z := range a.zones {
-			f(z)
-			if !a.isCombined46() {
-				if z6 := z.combined46; z6 != nil {
-					f(z6)
-				}
-			}
-		}
-	}
 	if len(list) == 0 {
 		c.warn("%s is empty", ctx)
 	}
@@ -380,7 +370,7 @@ func (c *spoc) expandGroup1(
 
 						// Add managed routers at border of security zones
 						// inside current area.
-						withCombinedZones(x, func(z *zone) {
+						for _, z := range x.zones {
 							for _, intf := range z.interfaces {
 								r := intf.router
 								if !seen[r] && (r.managed != "" || r.routingOnly) {
@@ -388,9 +378,9 @@ func (c *spoc) expandGroup1(
 									routers = append(routers, r)
 								}
 							}
-						})
+						}
 					} else {
-						withCombinedZones(x, func(z *zone) {
+						for _, z := range x.zones {
 							processWithSubnetworks(z.networks, func(n *network) {
 								for _, intf := range n.interfaces {
 									r := intf.router
@@ -400,7 +390,7 @@ func (c *spoc) expandGroup1(
 									}
 								}
 							})
-						})
+						}
 					}
 					if selector == "all" {
 						for _, r := range routers {
@@ -468,21 +458,15 @@ func (c *spoc) expandGroup1(
 			subObjects := c.expandGroup1(x.GetElements(),
 				x.GetType()+":[..] of "+ctx, false, false)
 
-			getAggregates := func(obj groupObj, ipp netip.Prefix) netList {
+			getAggregates := func(obj groupObj, ipp netip.Prefix, visible bool,
+			) netList {
 				var zones []*zone
 				switch x := obj.(type) {
 				case *area:
-					seen := make(map[*zone]bool)
-					withCombinedZones(x, func(z *zone) {
-						z = z.cluster[0]
-						if !seen[z] {
-							seen[z] = true
-							zones = append(zones, z)
-						}
-					})
+					zones = x.zones
 				case *network:
 					if x.isAggregate {
-						zones = append(zones, x.zone)
+						zones = []*zone{x.zone}
 					}
 				}
 				if zones == nil {
@@ -490,15 +474,14 @@ func (c *spoc) expandGroup1(
 				}
 				result := netList{}
 				for _, z := range zones {
-
-					// Silently ignore loopback aggregate.
+					// Silently ignore loopback zone.
 					if len(z.networks) == 1 {
 						n := z.networks[0]
 						if n.loopback && n.interfaces[0].router.managed != "" {
 							continue
 						}
 					}
-					result = append(result, c.getAny(z, ipp, visible, ctx)...)
+					result = append(result, c.getAny(z, ipp, visible, ctx))
 				}
 				return result
 			}
@@ -506,15 +489,21 @@ func (c *spoc) expandGroup1(
 				result := netList{}
 				switch x := obj.(type) {
 				case *host:
-					return netList{x.network}
+					n := x.network
+					if n6 := n.combined46; n6 != nil && x.combined46 == nil {
+						return netList{n, n6}
+					}
+					return netList{n}
 				case *routerIntf:
-
 					// Ignore network at managed loopback interface.
 					if x.loopback && x.router.managed != "" {
 						return netList{}
-					} else {
-						return netList{x.network}
 					}
+					n := x.network
+					if n6 := n.combined46; n6 != nil && x.combined46 == nil {
+						return netList{n, n6}
+					}
+					return netList{n}
 				case *network:
 					if !x.isAggregate {
 						result.push(x)
@@ -527,7 +516,7 @@ func (c *spoc) expandGroup1(
 					}
 				case *area:
 					unset := netip.Prefix{}
-					list := getAggregates(obj, unset)
+					list := getAggregates(obj, unset, false)
 					for _, agg := range list {
 
 						// Check type, because getAggregates potentially
@@ -644,7 +633,7 @@ func (c *spoc) expandGroup1(
 						}
 						continue
 					}
-					if l := getAggregates(obj, ipp); l != nil {
+					if l := getAggregates(obj, ipp, visible); l != nil {
 						for _, agg := range l {
 							if !seen[agg] {
 								seen[agg] = true
@@ -653,10 +642,24 @@ func (c *spoc) expandGroup1(
 						}
 					} else if l := getNetworks(obj, false); l != nil {
 						for _, n := range l {
-							for _, a := range c.getAny(n.zone, ipp, visible, ctx) {
-								if !seen[a] {
-									seen[a] = true
-									result.push(a)
+							add := func(z *zone) {
+								for _, z1 := range z.cluster {
+									a := c.getAny(z1, ipp, visible, ctx)
+									if !seen[a] {
+										seen[a] = true
+										result.push(a)
+									}
+								}
+							}
+							z := n.zone
+							add(z)
+							// If network is single-stack and
+							// if zone is dual-stack and IP is unset,
+							// then also add IPv6 aggregate.
+							z0 := z.cluster[0]
+							if x.Net == "" && n.combined46 == nil {
+								if z6 := z0.combined46; z6 != nil {
+									add(z6)
 								}
 							}
 						}

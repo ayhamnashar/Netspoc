@@ -371,7 +371,7 @@ END
 =INPUT= ignored
 =WITH_OUTDIR=
 =ERROR=
-panic: invalid character 'B' looking for beginning of value
+panic: jsontext: invalid character 'B' at start of value
 =END=
 
 ############################################################

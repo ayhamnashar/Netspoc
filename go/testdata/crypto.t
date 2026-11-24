@@ -1669,10 +1669,10 @@ tunnel-group-map default-group VPN-single
 =TITLE=Merge split tunnel lists
 =INPUT=
 [[crypto_vpn]]
-network:work1 = { ip = 10.0.1.0/24; host:h1 = { ip = 10.0.1.10; } }
-network:work2 = { ip = 10.0.2.0/24; host:h2 = { ip = 10.0.2.10; } }
-network:work3 = { ip = 10.0.3.0/24; host:h3 = { ip = 10.0.3.10; } }
-network:work4 = { ip = 10.9.4.0/24; host:h4 = { ip = 10.9.4.10; } }
+network:work1 = { ip = 10.0.1.0/24;   host:h1 = { ip = 10.0.1.10; } }
+network:work2 = { ip = 10.0.2.0/24;   host:h2 = { ip = 10.0.2.10; } }
+network:work3 = { ip = 10.0.130.0/24; host:h3 = { ip = 10.0.130.10; } }
+network:work4 = { ip = 10.9.4.0/24;   host:h4 = { ip = 10.9.4.10; } }
 router:u = {
  interface:work1;
  interface:work2;
@@ -1684,7 +1684,7 @@ network:intern = { ip = 10.1.1.0/24;}
 router:asavpn = {
  model = ASA, VPN;
  managed;
- merge_tunnelspecified = 10.0.0.0/16, 10.9.4.0/22;
+ merge_tunnelspecified = 10.0.0.0/17, 10.0.128.0/17, 10.9.4.0/22;
  vpn_attributes = {
   trust-point = ASDM_TrustPoint1;
  }
@@ -1751,7 +1751,8 @@ service:s4 = {
 =OUTPUT=
 --asavpn
 ! split-tunnel-1
-access-list split-tunnel-1 standard permit 10.0.0.0 255.255.0.0
+access-list split-tunnel-1 standard permit 10.0.0.0 255.255.128.0
+access-list split-tunnel-1 standard permit 10.0.128.0 255.255.128.0
 --
 ! vpn-filter-u1@domain.x
 access-list vpn-filter-u1@domain.x extended permit ip host 10.99.1.10 any4
@@ -1768,13 +1769,16 @@ username u1@domain.x attributes
  vpn-filter value vpn-filter-u1@domain.x
  vpn-group-policy VPN-group-u1@domain.x
 --
+! split-tunnel-2
+access-list split-tunnel-2 standard permit 10.0.0.0 255.255.128.0
+--
 ! vpn-filter-u2@domain.x
 access-list vpn-filter-u2@domain.x extended permit ip host 10.99.1.11 any4
 access-list vpn-filter-u2@domain.x extended deny ip any4 any4
 group-policy VPN-group-u2@domain.x internal
 group-policy VPN-group-u2@domain.x attributes
  banner value Willkommen
- split-tunnel-network-list value split-tunnel-1
+ split-tunnel-network-list value split-tunnel-2
  split-tunnel-policy tunnelspecified
 username u2@domain.x nopassword
 username u2@domain.x attributes
@@ -1783,9 +1787,9 @@ username u2@domain.x attributes
  vpn-filter value vpn-filter-u2@domain.x
  vpn-group-policy VPN-group-u2@domain.x
 --
-! split-tunnel-2
-access-list split-tunnel-2 standard permit 10.0.0.0 255.255.0.0
-access-list split-tunnel-2 standard permit 10.9.4.0 255.255.252.0
+! split-tunnel-3
+access-list split-tunnel-3 standard permit 10.0.128.0 255.255.128.0
+access-list split-tunnel-3 standard permit 10.9.4.0 255.255.252.0
 --
 ! vpn-filter-u3@domain.x
 access-list vpn-filter-u3@domain.x extended permit ip host 10.99.1.12 any4
@@ -1793,7 +1797,7 @@ access-list vpn-filter-u3@domain.x extended deny ip any4 any4
 group-policy VPN-group-u3@domain.x internal
 group-policy VPN-group-u3@domain.x attributes
  banner value Willkommen
- split-tunnel-network-list value split-tunnel-2
+ split-tunnel-network-list value split-tunnel-3
  split-tunnel-policy tunnelspecified
 username u3@domain.x nopassword
 username u3@domain.x attributes
@@ -1802,8 +1806,8 @@ username u3@domain.x attributes
  vpn-filter value vpn-filter-u3@domain.x
  vpn-group-policy VPN-group-u3@domain.x
 --
-! split-tunnel-3
-access-list split-tunnel-3 standard deny any4
+! split-tunnel-4
+access-list split-tunnel-4 standard deny any4
 --
 ! vpn-filter-u4@domain.x
 access-list vpn-filter-u4@domain.x extended permit ip host 10.99.1.254 any4
@@ -1811,7 +1815,7 @@ access-list vpn-filter-u4@domain.x extended deny ip any4 any4
 group-policy VPN-group-u4@domain.x internal
 group-policy VPN-group-u4@domain.x attributes
  banner value Willkommen
- split-tunnel-network-list value split-tunnel-3
+ split-tunnel-network-list value split-tunnel-4
  split-tunnel-policy tunnelspecified
 username u4@domain.x nopassword
 username u4@domain.x attributes
@@ -1819,6 +1823,8 @@ username u4@domain.x attributes
  service-type remote-access
  vpn-filter value vpn-filter-u4@domain.x
  vpn-group-policy VPN-group-u4@domain.x
+=WARNING=
+Warning: 10.0.0.0/17 and 10.0.128.0/17 should be combined to 10.0.0.0/16 in merge_tunnelspecified of router:asavpn
 =END=
 
 ############################################################
@@ -2144,6 +2150,7 @@ router:softclients = {
 network:customers1 = {
  ip = 10.99.1.0/24;
  vpn_attributes = { check-extended-key-usage = 1.3.6.1.4.1.311.20.2.2; }
+ host:id:büro@domain.x = { ip = 10.99.1.9; }
  host:id:foo@domain.x = { ip = 10.99.1.10; }
  host:id:long-first-name.long-second-name@long-domain.xyz = {
   ip = 10.99.1.11;
@@ -2183,6 +2190,15 @@ tunnel-group VPN-single webvpn-attributes
  authentication certificate
 tunnel-group-map default-group VPN-single
 --
+! vpn-filter-1
+access-list vpn-filter-1 extended permit ip host 10.99.1.9 any4
+access-list vpn-filter-1 extended deny ip any4 any4
+username büro@domain.x nopassword
+username büro@domain.x attributes
+ vpn-framed-ip-address 10.99.1.9 255.255.255.0
+ service-type remote-access
+ vpn-filter value vpn-filter-1
+--
 ! vpn-filter-foo@domain.x
 access-list vpn-filter-foo@domain.x extended permit ip host 10.99.1.10 any4
 access-list vpn-filter-foo@domain.x extended deny ip any4 any4
@@ -2192,18 +2208,18 @@ username foo@domain.x attributes
  service-type remote-access
  vpn-filter value vpn-filter-foo@domain.x
 --
-! vpn-filter-1
-access-list vpn-filter-1 extended permit ip host 10.99.1.11 any4
-access-list vpn-filter-1 extended deny ip any4 any4
-group-policy VPN-group-1 internal
-group-policy VPN-group-1 attributes
+! vpn-filter-2
+access-list vpn-filter-2 extended permit ip host 10.99.1.11 any4
+access-list vpn-filter-2 extended deny ip any4 any4
+group-policy VPN-group-2 internal
+group-policy VPN-group-2 attributes
  banner value Willkommen zu Hause
 username long-first-name.long-second-name@long-domain.xyz nopassword
 username long-first-name.long-second-name@long-domain.xyz attributes
  vpn-framed-ip-address 10.99.1.11 255.255.255.0
  service-type remote-access
- vpn-filter value vpn-filter-1
- vpn-group-policy VPN-group-1
+ vpn-filter value vpn-filter-2
+ vpn-group-policy VPN-group-2
 --
 crypto ca certificate map ca-map-@domain.x 10
  subject-name attr ea co @domain.x

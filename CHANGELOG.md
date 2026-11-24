@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2026-10-27-1310]
+
+### Changed
+
+- Config option 'fix_dual_stack_areas' has been removed.
+- If IP/prefix values in 'filter_only' should be combined, a warning is shown.
+
+### Fixed
+
+- Fixed issues with dual stack areas, aggregates and networks (#76, #77, #78).
+
+## [2026-09-16-1647]
+
+### Changed
+
+- Dual-Stack networks that inherit different owners are rejected now.
+- Aggregates inside a managed=local cluster that don't match
+  attribute 'filter_only' are rejected now.
+- Program "export-netspoc" no longer exports visible services.
+  Lists are empty now.
+- Config option 'fix_dual_stack_areas' has been changed to default value 1.
+  It will be removed completely in next version of Netspoc.
+
+## [2026-09-10-1319]
+
+### Changed
+
+- If an area contains at least one dual stack area, it is marked as
+  dual stack.
+  This new behaviour is disabled by default and must be enabled by
+  command line flag '--fix_dual_stack_areas' or
+  config option 'fix_dual_stack_areas = 1'.
+  It will be enabled by default in next version of Netspoc.
+- Until now it was possible to define an area with disjoint IPv4 and IPv6 parts.
+  These must be connected by dual-stack network now.
+
+### Fixed
+
+- Fixed panic on invalid path in print-path.
+
 ## [2026-09-01-1028]
 
 ### Fixed

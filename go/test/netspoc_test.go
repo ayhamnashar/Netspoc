@@ -2,7 +2,8 @@ package netspoc_test
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"io"
 	"os"
 	"os/exec"
@@ -292,6 +293,8 @@ func runTest(t *testing.T, tc test, d descr) {
 		stderr = re.ReplaceAllString(stderr, "")
 		re = regexp.MustCompile(`\nUsage: .*(?:\n\s.*)*`)
 		stderr = re.ReplaceAllString(stderr, "")
+		// Normalize non-deterministic error messages of encoding/json/v2.
+		stderr = strings.Replace(stderr, "json: unable to ", "json: cannot ", 1)
 		countEq(t, d.Error, stderr)
 	}
 	if d.Output != "" {
@@ -489,10 +492,10 @@ func jsonEq(t *testing.T, expected string, got []byte) {
 			t.Fatal(err)
 		}
 		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		enc.SetEscapeHTML(false)
-		enc.SetIndent("", " ")
-		enc.Encode(v)
+		json.MarshalWrite(&b, v,
+			json.Deterministic(true),
+			jsontext.EscapeForHTML(false),
+			jsontext.WithIndent(" "))
 		return b.String()
 	}
 	countEq(t, normalize([]byte(expected)), normalize(got))

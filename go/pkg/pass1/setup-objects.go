@@ -1152,7 +1152,7 @@ func rangeSize(rg netipx.IPRange) []int {
 
 func (c *spoc) setupAggregate(v *ast.TopStruct) {
 	name := v.Name
-	ag := &network{name: name, isAggregate: true}
+	ag := &network{name: name, isAggregate: true, visible: true}
 	agName := name[len("any:"):]
 	c.symTable.aggregate[agName] = ag
 	hasLink := false
@@ -2246,6 +2246,7 @@ func (c *spoc) setupInterface(
 				ipV6:     v6,
 				ipp:      netip.PrefixFrom(intf.ip, intf.ip.BitLen()),
 				loopback: true, // Mark as automatically created.
+				owner:    intf.owner,
 				subnetOf: subnetOf,
 			}
 			// Move NAT definition to loopback network.
@@ -3057,6 +3058,23 @@ func (c *spoc) getIpPrefixList(a *ast.Attribute, ctx string) []netip.Prefix {
 	var result []netip.Prefix
 	for _, v := range c.getValueList(a, ctx) {
 		result = append(result, c.convIpPrefix(v, a.Name, ctx))
+	}
+	slices.SortFunc(result, func(a, b netip.Prefix) int { return a.Compare(b) })
+	// Compare addresses pairwise.
+	v1 := result[0]
+	for _, v2 := range result[1:] {
+		if v1 == v2 {
+			c.warn("Duplicate value %s in %s of %s", v1, a.Name, ctx)
+		} else if b := v1.Bits(); b == v2.Bits() {
+			ip := v1.Addr()
+			if combined, _ := ip.Prefix(b - 1); combined.Addr() == ip {
+				if v2.Addr() == netipx.RangeOfPrefix(v1).To().Next() {
+					c.warn("%s and %s should be combined to %s in %s of %s",
+						v1, v2, combined, a.Name, ctx)
+				}
+			}
+		}
+		v1 = v2
 	}
 	return result
 }

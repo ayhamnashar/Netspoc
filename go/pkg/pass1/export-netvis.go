@@ -335,43 +335,80 @@ func getVisArea(a *area, home map[*router]*area, routerList []*router, neighbors
 	return node
 }
 
-// routerNeighborCount counts a router's interfaces plus the neighboring
-// areas it borders on (border or inclusive_border), excluding its home
-// area and enclosing areas.
+// routerNeighborCount counts a router's adjacent networks plus the
+// neighboring areas it borders on (border or inclusive_border), excluding
+// its home area and enclosing areas. Dual-stack objects are counted once.
 func routerNeighborCount(r *router, home map[*router]*area, roleInAreas map[*routerIntf][]*area) int {
 	if r.origRouter != nil {
 		r = r.origRouter
 	}
-	count := len(r.interfaces)
-	h := home[r]
-	seen := make(map[string]bool)
-	for _, intf := range r.interfaces {
-		for _, a := range roleInAreas[intf] {
-			if seen[a.name] || a == h || areaIsAncestor(h, a) {
-				continue
-			}
-			seen[a.name] = true
-			count++
+	seenNets := make(map[string]bool)
+	add := func(r *router) {
+		for _, intf := range r.interfaces {
+			seenNets[intf.network.name] = true
 		}
+	}
+	add(r)
+	if r.isCombined46() {
+		add(r.combined46)
+	}
+	count := len(seenNets)
+	h := home[r]
+	seenAreas := make(map[string]bool)
+	checkAreas := func(r *router) {
+		for _, intf := range r.interfaces {
+			for _, a := range roleInAreas[intf] {
+				if seenAreas[a.name] || a == h || areaIsAncestor(h, a) {
+					continue
+				}
+				seenAreas[a.name] = true
+				count++
+			}
+		}
+	}
+	checkAreas(r)
+	if r.isCombined46() {
+		checkAreas(r.combined46)
 	}
 	return count
 }
 
-// networkNeighborCount counts a network's interfaces plus the neighboring
-// areas that have one of them as border or inclusive_border, excluding the
-// network's own area and enclosing areas.
+// networkNeighborCount counts a network's adjacent routers plus the
+// neighboring areas that have one of them as border or inclusive_border,
+// excluding the network's own area and enclosing areas. Dual-stack objects
+// are counted once.
 func networkNeighborCount(n *network, roleInAreas map[*routerIntf][]*area) int {
-	count := len(n.interfaces)
-	a := n.zone.inArea
-	seen := make(map[string]bool)
-	for _, intf := range n.interfaces {
-		for _, x := range roleInAreas[intf] {
-			if seen[x.name] || x == a || areaIsAncestor(a, x) {
-				continue
+	seenRouters := make(map[string]bool)
+	add := func(n *network) {
+		for _, intf := range n.interfaces {
+			r := intf.router
+			if r.origRouter != nil {
+				r = r.origRouter
 			}
-			seen[x.name] = true
-			count++
+			seenRouters[r.name] = true
 		}
+	}
+	add(n)
+	if n.isCombined46() {
+		add(n.combined46)
+	}
+	count := len(seenRouters)
+	a := n.zone.inArea
+	seenAreas := make(map[string]bool)
+	checkAreas := func(n *network) {
+		for _, intf := range n.interfaces {
+			for _, x := range roleInAreas[intf] {
+				if seenAreas[x.name] || x == a || areaIsAncestor(a, x) {
+					continue
+				}
+				seenAreas[x.name] = true
+				count++
+			}
+		}
+	}
+	checkAreas(n)
+	if n.isCombined46() {
+		checkAreas(n.combined46)
 	}
 	return count
 }
@@ -403,31 +440,42 @@ func getVisNetwork(net *network, networks map[string]visNetwork, home map[*route
 		node.InArea = a.name
 	}
 
-	getVisNeigh := func(intf *routerIntf) visNeighbor {
-		r := intf.router
-		if r.origRouter != nil {
-			r = r.origRouter
-		}
-		return visNeighbor{Id: r.name, NeighborCount: routerNeighborCount(r, home, roleInAreas)}
-	}
-
 	seenAreas := make(map[*area]bool)
-	// Keep router neighbors first, preserving the existing output order.
-	for _, in := range net.interfaces {
-		node.Neighbors = append(node.Neighbors, getVisNeigh(in))
-	}
-	for _, in := range net.interfaces {
-		// Add neighboring areas at this network's boundary interfaces,
-		// excluding its own area and enclosing areas.
-		for _, a := range roleInAreas[in] {
-			if seenAreas[a] || a == net.zone.inArea || areaIsAncestor(net.zone.inArea, a) {
+	addNeighbors := func(net *network, ignoreCombined bool) {
+		// Keep router neighbors first, preserving the existing output order.
+		for _, in := range net.interfaces {
+			if ignoreCombined && in.isCombined46() {
 				continue
 			}
-			seenAreas[a] = true
+			r := in.router
+			if r.origRouter != nil {
+				r = r.origRouter
+			}
 			node.Neighbors = append(node.Neighbors,
-				visNeighbor{Id: a.name, NeighborCount: areaCount[a]})
+				visNeighbor{Id: r.name, NeighborCount: routerNeighborCount(r, home, roleInAreas)})
+		}
+		for _, in := range net.interfaces {
+			if ignoreCombined && in.isCombined46() {
+				continue
+			}
+			// Add neighboring areas at this network's boundary interfaces,
+			// excluding its own area and enclosing areas.
+			for _, a := range roleInAreas[in] {
+				if seenAreas[a] || a == net.zone.inArea || areaIsAncestor(net.zone.inArea, a) {
+					continue
+				}
+				seenAreas[a] = true
+				node.Neighbors = append(node.Neighbors,
+					visNeighbor{Id: a.name, NeighborCount: areaCount[a]})
+			}
 		}
 	}
+
+	addNeighbors(net, false)
+	if net.isCombined46() {
+		addNeighbors(net.combined46, true)
+	}
+
 	for _, h := range net.hosts {
 		node.Hosts = append(node.Hosts, h.name)
 	}
@@ -469,7 +517,7 @@ func getVisRouter(r *router, home map[*router]*area, roleInAreas map[*routerIntf
 				for _, intf2 := range intf.network.interfaces {
 					if intf2.router != r {
 						node.Neighbors = append(node.Neighbors,
-							visNeighbor{Id: intf2.router.name, NeighborCount: len(intf2.router.interfaces), IsTunnel: true})
+							visNeighbor{Id: intf2.router.name, NeighborCount: routerNeighborCount(intf2.router, home, roleInAreas), IsTunnel: true})
 					}
 				}
 			} else {
